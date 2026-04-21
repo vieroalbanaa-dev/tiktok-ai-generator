@@ -1,23 +1,24 @@
 """
 TikTok Content Auto-Generator — Gaya Ferry Irwandi
-Untuk promosi e-book AI / Claude Prompt
+Versi: Google Gemini API (GRATIS)
 
 Cara pakai:
-  1. pip install anthropic
-  2. Set API key: export ANTHROPIC_API_KEY="sk-ant-..."
+  1. pip install google-generativeai
+  2. Set API key: export GEMINI_API_KEY="AIza..."
   3. Jalankan: python tiktok_generator.py
-  4. Atau generate batch: python tiktok_generator.py --batch 5 --output konten_minggu_ini.md
+  4. Batch: python tiktok_generator.py --batch 5 --output konten_minggu_ini.md
 """
 
-import anthropic
+import google.generativeai as genai
 import argparse
 import json
+import os
 import random
 from datetime import datetime, timedelta
 from pathlib import Path
 
 
-# ─── Konfigurasi ────────────────────────────────────────────────────────────
+# ─── Konfigurasi ─────────────────────────────────────────────────────────────
 
 EBOOK_CONTEXT = """
 E-book: Kumpulan 50+ prompt Claude AI yang sudah terbukti meningkatkan produktivitas 10x
@@ -63,82 +64,58 @@ CONTENT_FORMATS = [
     },
 ]
 
-TONES = [
-    "santai tapi berbobot, seperti ngobrol sama teman yang lebih tau",
-    "direct dan to-the-point, tanpa basa-basi",
-    "sedikit provokatif tapi tetap membangun",
-    "penuh empati, seolah benar-benar ngerti struggle audiensnya",
+TOPIK_LIST = [
+    "cara pakai AI untuk nulis email profesional",
+    "prompt untuk riset bisnis dalam 5 menit",
+    "belajar skill baru 3x lebih cepat dengan AI",
+    "cara AI bantu Gen Z dapat side income",
+    "prompt untuk persiapan interview kerja",
+    "AI untuk nulis CV dan cover letter",
+    "cara pakai AI buat presentasi yang meyakinkan",
+    "prompt untuk analisis kompetitor bisnis",
 ]
 
 
-# ─── Generator Utama ─────────────────────────────────────────────────────────
+# ─── Generator ────────────────────────────────────────────────────────────────
 
-def generate_tiktok_script(
-    client: anthropic.Anthropic,
-    format_konten: dict,
-    topik_spesifik: str = None,
-    tone: str = None,
-) -> dict:
-    """Generate satu skrip TikTok lengkap."""
+def generate_tiktok_script(model, format_konten: dict, topik_spesifik: str = None) -> dict:
+    topik = topik_spesifik or random.choice(TOPIK_LIST)
 
-    tone = tone or random.choice(TONES)
-    topik = topik_spesifik or random.choice([
-        "cara pakai Claude untuk nulis email profesional",
-        "prompt untuk riset bisnis dalam 5 menit",
-        "belajar skill baru 3x lebih cepat dengan AI",
-        "cara AI bantu Gen Z dapat side income",
-        "prompt untuk persiapan interview kerja",
-        "AI untuk nulis CV dan cover letter",
-        "cara pakai AI buat presentasi yang meyakinkan",
-        "prompt untuk analisis kompetitor bisnis",
-    ])
-
-    system_prompt = """Kamu adalah content creator TikTok Indonesia yang ahli di bidang AI dan produktivitas.
+    prompt = f"""Kamu adalah content creator TikTok Indonesia yang ahli di bidang AI dan produktivitas.
 Gaya kamu persis seperti Ferry Irwandi: bicara natural, buka dengan konflik atau fakta mengejutkan,
 jelasin hal rumit pakai analogi sederhana, selipkan sisi manusia lewat cerita personal.
 
 ATURAN PENULISAN:
-- Kalimat pendek-pendek. Maksimal 10 kata per kalimat.
+- Kalimat pendek-pendek, maksimal 10 kata per kalimat
 - Sering pakai baris kosong untuk jeda dramatik
-- Bahasa Indonesia campur sedikit Inggris (natural, bukan sok keren)
+- Bahasa Indonesia campur sedikit Inggris (natural)
 - JANGAN pakai kata: "kawan", "teman-teman", "guys", "sob"
-- Mulai dengan hook yang bikin orang berhenti scroll dalam 3 detik pertama
+- Hook yang bikin orang berhenti scroll dalam 3 detik pertama
 - Durasi bicara: 45-60 detik (sekitar 120-150 kata)
-- Akhiri dengan insight kuat, BUKAN dengan "semoga bermanfaat" atau sejenisnya
+- Akhiri dengan insight kuat, BUKAN "semoga bermanfaat"
 
-OUTPUT FORMAT (JSON):
-{
-  "hook": "kalimat pembuka saja",
-  "script": "skrip lengkap dengan baris kosong sebagai jeda",
-  "hashtags": ["#tag1", "#tag2", ...],
-  "durasi_estimasi": "XX detik",
-  "tips_delivery": "1 tips cara bawain video ini"
-}"""
+FORMAT KONTEN: {format_konten['nama']}
+DESKRIPSI: {format_konten['deskripsi']}
+CONTOH HOOK REFERENSI (jangan copy, cari yang lebih segar): {format_konten['contoh_hook']}
+TOPIK: {topik}
 
-    user_prompt = f"""Buatkan skrip TikTok dengan format: {format_konten['nama']}
-Deskripsi format: {format_konten['deskripsi']}
-Contoh hook referensi (jangan copy, cari yang lebih segar): {format_konten['contoh_hook']}
-
-Topik spesifik: {topik}
-Tone: {tone}
-
-Konteks e-book yang dipromosikan:
+KONTEKS E-BOOK:
 {EBOOK_CONTEXT}
 
-Ingat: skrip ini untuk VIDEO, bukan tulisan. Tulis seperti orang ngomong, bukan seperti artikel.
-Balas HANYA dengan JSON, tanpa teks lain."""
+Balas HANYA dengan JSON ini, tanpa teks lain, tanpa markdown fence:
+{{
+  "hook": "kalimat pembuka saja",
+  "script": "skrip lengkap dengan baris kosong sebagai jeda",
+  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
+  "durasi_estimasi": "XX detik",
+  "tips_delivery": "1 tips cara bawain video ini"
+}}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        messages=[{"role": "user", "content": user_prompt}],
-        system=system_prompt,
-    )
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
 
-    raw = response.content[0].text.strip()
-
-    # Bersihkan jika ada markdown fence
-    if raw.startswith("```"):
+    # Bersihkan markdown fence jika ada
+    if "```" in raw:
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
@@ -148,162 +125,106 @@ Balas HANYA dengan JSON, tanpa teks lain."""
     result["format"] = format_konten["nama"]
     result["topik"] = topik
     result["generated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-
     return result
 
 
-def generate_daily_batch(
-    client: anthropic.Anthropic,
-    jumlah: int = 5,
-) -> list[dict]:
-    """Generate sejumlah skrip sekaligus dengan format yang beragam."""
-
-    print(f"\n🎬 Generating {jumlah} skrip TikTok...\n")
-
-    # Pastikan format beragam — tidak ada yang sama berturut-turut
+def generate_daily_batch(model, jumlah: int = 3) -> list:
+    print(f"\n Generating {jumlah} skrip TikTok...\n")
     formats = (CONTENT_FORMATS * 3)[:jumlah]
     random.shuffle(formats)
 
     results = []
     for i, fmt in enumerate(formats, 1):
-        print(f"  [{i}/{jumlah}] Format: {fmt['nama']}...", end=" ", flush=True)
+        print(f"  [{i}/{jumlah}] {fmt['nama']}...", end=" ", flush=True)
         try:
-            script = generate_tiktok_script(client, fmt)
+            script = generate_tiktok_script(model, fmt)
             results.append(script)
-            print("✓")
+            print("OK")
         except Exception as e:
-            print(f"✗ Error: {e}")
-
+            print(f"Error: {e}")
     return results
 
 
-# ─── Output Formatter ────────────────────────────────────────────────────────
+# ─── Output ───────────────────────────────────────────────────────────────────
 
-def format_markdown(scripts: list[dict], mulai_tanggal: str = None) -> str:
-    """Format hasil sebagai Markdown siap copy-paste."""
-
+def format_markdown(scripts: list, mulai_tanggal: str = None) -> str:
     tanggal = datetime.strptime(mulai_tanggal, "%Y-%m-%d") if mulai_tanggal else datetime.today()
     lines = [
-        f"# Content TikTok — E-book AI",
+        "# Konten TikTok — E-book AI",
         f"Dibuat: {datetime.now().strftime('%d %B %Y, %H:%M')}",
-        f"Total: {len(scripts)} skrip\n",
-        "---\n",
+        f"Total: {len(scripts)} skrip\n---\n",
     ]
-
     for i, s in enumerate(scripts, 1):
-        posting_date = (tanggal + timedelta(days=i - 1)).strftime("%A, %d %B %Y")
-        lines.append(f"## Video {i} — {posting_date}")
-        lines.append(f"**Format:** {s.get('format', '-')}")
-        lines.append(f"**Topik:** {s.get('topik', '-')}")
-        lines.append(f"**Durasi:** {s.get('durasi_estimasi', '-')}")
-        lines.append(f"**Dibuat:** {s.get('generated_at', '-')}\n")
-        lines.append(f"### Hook")
-        lines.append(f"> {s.get('hook', '')}\n")
-        lines.append(f"### Skrip Lengkap")
-        lines.append("```")
-        lines.append(s.get("script", ""))
-        lines.append("```\n")
-        lines.append(f"### Hashtags")
-        lines.append(" ".join(s.get("hashtags", [])))
-        lines.append(f"\n### Tips Delivery")
-        lines.append(f"💡 {s.get('tips_delivery', '-')}")
-        lines.append("\n---\n")
-
+        tgl = (tanggal + timedelta(days=i - 1)).strftime("%A, %d %B %Y")
+        lines += [
+            f"## Video {i} — {tgl}",
+            f"**Format:** {s.get('format')}",
+            f"**Topik:** {s.get('topik')}",
+            f"**Durasi:** {s.get('durasi_estimasi')}",
+            f"\n### Hook\n> {s.get('hook')}\n",
+            f"### Skrip\n```\n{s.get('script')}\n```\n",
+            f"### Hashtags\n{' '.join(s.get('hashtags', []))}",
+            f"\n### Tips Delivery\n{s.get('tips_delivery')}\n\n---\n",
+        ]
     return "\n".join(lines)
 
 
 def print_single(s: dict):
-    """Print satu skrip ke terminal."""
-    print("\n" + "=" * 60)
-    print(f"FORMAT  : {s.get('format')}")
-    print(f"TOPIK   : {s.get('topik')}")
-    print(f"DURASI  : {s.get('durasi_estimasi')}")
-    print(f"DIBUAT  : {s.get('generated_at')}")
-    print("-" * 60)
+    print("\n" + "=" * 55)
+    print(f"FORMAT : {s.get('format')}")
+    print(f"TOPIK  : {s.get('topik')}")
+    print(f"DURASI : {s.get('durasi_estimasi')}")
+    print("-" * 55)
     print(f"HOOK:\n  {s.get('hook')}")
-    print("-" * 60)
+    print("-" * 55)
     print("SKRIP:")
-    print(s.get("script", ""))
-    print("-" * 60)
+    print(s.get("script"))
+    print("-" * 55)
     print("HASHTAGS:", " ".join(s.get("hashtags", [])))
-    print(f"TIPS    : {s.get('tips_delivery')}")
-    print("=" * 60 + "\n")
+    print(f"TIPS   : {s.get('tips_delivery')}")
+    print("=" * 55 + "\n")
 
 
-# ─── CLI ─────────────────────────────────────────────────────────────────────
+# ─── CLI ──────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Auto-generate skrip TikTok harian pakai Claude AI"
-    )
-    parser.add_argument(
-        "--batch", type=int, default=1,
-        help="Jumlah skrip yang di-generate (default: 1)"
-    )
-    parser.add_argument(
-        "--output", type=str, default=None,
-        help="Simpan ke file .md (contoh: konten_minggu_ini.md)"
-    )
-    parser.add_argument(
-        "--format", type=str, default=None,
-        choices=[f["nama"] for f in CONTENT_FORMATS],
-        help="Pilih format spesifik (opsional)"
-    )
-    parser.add_argument(
-        "--topik", type=str, default=None,
-        help="Topik spesifik yang ingin dibahas (opsional)"
-    )
-    parser.add_argument(
-        "--mulai-tanggal", type=str, default=None,
-        help="Tanggal mulai posting untuk kalender (format: YYYY-MM-DD)"
-    )
-    parser.add_argument(
-        "--list-format", action="store_true",
-        help="Tampilkan semua format yang tersedia"
-    )
+    parser = argparse.ArgumentParser(description="Auto-generate skrip TikTok pakai Gemini AI (gratis)")
+    parser.add_argument("--batch", type=int, default=1, help="Jumlah skrip (default: 1)")
+    parser.add_argument("--output", type=str, default=None, help="Simpan ke file .md")
+    parser.add_argument("--topik", type=str, default=None, help="Topik spesifik (opsional)")
+    parser.add_argument("--mulai-tanggal", type=str, default=None, help="Format: YYYY-MM-DD")
     args = parser.parse_args()
 
-    # Tampilkan daftar format
-    if args.list_format:
-        print("\nFormat konten yang tersedia:\n")
-        for i, f in enumerate(CONTENT_FORMATS, 1):
-            print(f"  {i}. {f['nama']}")
-            print(f"     {f['deskripsi']}")
-            print(f"     Contoh hook: \"{f['contoh_hook']}\"\n")
+    # Setup Gemini
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("ERROR: GEMINI_API_KEY belum di-set!")
+        print("Cara set: export GEMINI_API_KEY='AIza...'")
         return
 
-    # Inisialisasi client
-    client = anthropic.Anthropic()  # Otomatis baca ANTHROPIC_API_KEY dari env
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
 
-    print("🤖 TikTok Content Generator — E-book AI")
-    print("   Model: claude-sonnet-4-20250514")
+    print("TikTok Content Generator — Gemini AI (Gratis)")
+    print("Model: gemini-2.0-flash")
 
     if args.batch == 1:
-        # Generate satu skrip
-        fmt = next((f for f in CONTENT_FORMATS if f["nama"] == args.format), None) \
-              or random.choice(CONTENT_FORMATS)
+        fmt = random.choice(CONTENT_FORMATS)
         print(f"\nGenerating 1 skrip (format: {fmt['nama']})...", end=" ", flush=True)
-        script = generate_tiktok_script(client, fmt, topik_spesifik=args.topik)
-        print("✓")
+        script = generate_tiktok_script(model, fmt, topik_spesifik=args.topik)
+        print("OK")
         print_single(script)
         scripts = [script]
     else:
-        # Generate batch
-        scripts = generate_daily_batch(client, jumlah=args.batch)
+        scripts = generate_daily_batch(model, jumlah=args.batch)
 
-    # Simpan ke file jika diminta
     if args.output:
         md = format_markdown(scripts, mulai_tanggal=args.mulai_tanggal)
         Path(args.output).write_text(md, encoding="utf-8")
-        print(f"\n✅ Tersimpan di: {args.output}")
-        print(f"   Total: {len(scripts)} skrip siap posting")
-    else:
-        if args.batch > 1:
-            for s in scripts:
-                print_single(s)
-
-    print(f"\n💡 Tips: Jalankan setiap pagi dengan cron job:")
-    print(f"   0 7 * * * cd /path/to/folder && python tiktok_generator.py --batch 3 --output konten_hari_ini.md\n")
+        print(f"\nTersimpan: {args.output} ({len(scripts)} skrip)")
+    elif args.batch > 1:
+        for s in scripts:
+            print_single(s)
 
 
 if __name__ == "__main__":
