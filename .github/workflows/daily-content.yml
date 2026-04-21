@@ -1,0 +1,35 @@
+name: Generate TikTok Content
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Setiap hari jam 07.00 WIB
+  workflow_dispatch:       # Bisa juga dijalankan manual kapanpun
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-generativeai
+
+      - name: Generate konten hari ini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python tiktok_generator.py --batch 3 \
+            --output konten_$(date +%Y-%m-%d).md
+
+      - name: Simpan hasil ke repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add konten_*.md
+          git commit -m "Konten TikTok $(date +%Y-%m-%d)" || echo "Tidak ada perubahan"
+          git push
