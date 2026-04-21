@@ -3,13 +3,13 @@ TikTok Content Auto-Generator — Gaya Ferry Irwandi
 Versi: Google Gemini API (GRATIS)
 
 Cara pakai:
-  1. pip install google-generativeai
+  1. pip install google-genai
   2. Set API key: export GEMINI_API_KEY="AIza..."
   3. Jalankan: python tiktok_generator.py
   4. Batch: python tiktok_generator.py --batch 5 --output konten_minggu_ini.md
 """
 
-import google.generativeai as genai
+import google.genai as genai
 import argparse
 import json
 import os
@@ -78,7 +78,7 @@ TOPIK_LIST = [
 
 # ─── Generator ────────────────────────────────────────────────────────────────
 
-def generate_tiktok_script(model, format_konten: dict, topik_spesifik: str = None) -> dict:
+def generate_tiktok_script(client, format_konten: dict, topik_spesifik: str = None) -> dict:
     topik = topik_spesifik or random.choice(TOPIK_LIST)
 
     prompt = f"""Kamu adalah content creator TikTok Indonesia yang ahli di bidang AI dan produktivitas.
@@ -111,7 +111,7 @@ Balas HANYA dengan JSON ini, tanpa teks lain, tanpa markdown fence:
   "tips_delivery": "1 tips cara bawain video ini"
 }}"""
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
     raw = response.text.strip()
 
     # Bersihkan markdown fence jika ada
@@ -128,7 +128,7 @@ Balas HANYA dengan JSON ini, tanpa teks lain, tanpa markdown fence:
     return result
 
 
-def generate_daily_batch(model, jumlah: int = 3) -> list:
+def generate_daily_batch(client, jumlah: int = 3) -> list:
     print(f"\n Generating {jumlah} skrip TikTok...\n")
     formats = (CONTENT_FORMATS * 3)[:jumlah]
     random.shuffle(formats)
@@ -137,7 +137,7 @@ def generate_daily_batch(model, jumlah: int = 3) -> list:
     for i, fmt in enumerate(formats, 1):
         print(f"  [{i}/{jumlah}] {fmt['nama']}...", end=" ", flush=True)
         try:
-            script = generate_tiktok_script(model, fmt)
+            script = generate_tiktok_script(client, fmt)
             results.append(script)
             print("OK")
         except Exception as e:
@@ -202,8 +202,8 @@ def main():
         print("Cara set: export GEMINI_API_KEY='AIza...'")
         return
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    client = genai.Client(api_key=api_key)
+    
 
     print("TikTok Content Generator — Gemini AI (Gratis)")
     print("Model: gemini-2.0-flash")
@@ -211,12 +211,12 @@ def main():
     if args.batch == 1:
         fmt = random.choice(CONTENT_FORMATS)
         print(f"\nGenerating 1 skrip (format: {fmt['nama']})...", end=" ", flush=True)
-        script = generate_tiktok_script(model, fmt, topik_spesifik=args.topik)
+        script = generate_tiktok_script(client, fmt, topik_spesifik=args.topik)
         print("OK")
         print_single(script)
         scripts = [script]
     else:
-        scripts = generate_daily_batch(model, jumlah=args.batch)
+        scripts = generate_daily_batch(client, jumlah=args.batch)
 
     if args.output:
         md = format_markdown(scripts, mulai_tanggal=args.mulai_tanggal)
